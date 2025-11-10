@@ -1,0 +1,61 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+frontend/node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+
+# Build outputs
+backend/dist/
+frontend/dist/
+frontend/build/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+
+# Docker
+docker-compose.override.yml
+
+# SonarQube
+.sonar/
+sonar-project.properties
+
+# JMeter
+*.jmx.bak
+jmeter-results/
+
+# Postman
+postman/collection.json.bak
+
+# MongoDB
+data/
+*.db
+
+
