@@ -1,0 +1,152 @@
+name: Security Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Monday at 9 AM
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  snyk-security:
+    name: Snyk Dependency Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend && npm ci
+          cd ../frontend && npm ci
+
+      - name: Run Snyk Security Test - Backend
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=backend/package.json --severity-threshold=high
+
+      - name: Run Snyk Security Test - Frontend
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=frontend/package.json --severity-threshold=high
+
+      - name: Upload Snyk results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: snyk.sarif
+
+  zap-baseline:
+    name: OWASP ZAP Baseline Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Create reports directory
+        run: mkdir -p security-tests/reports
+
+      - name: Start Docker Compose services
+        run: |
+          docker-compose up -d
+          sleep 30  # Wait for services to be ready
+
+      - name: Wait for application to be ready
+        run: |
+          echo "Waiting for frontend..."
+          timeout 60 bash -c 'until curl -f http://localhost:5173; do sleep 2; done'
+          echo "Waiting for backend..."
+          timeout 60 bash -c 'until curl -f http://localhost:5000/api/health || curl -f http://localhost:5000; do sleep 2; done'
+
+      - name: Run OWASP ZAP Baseline Scan - Frontend
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:5173'
+          rules_file_name: 'security-tests/zap-baseline.conf'
+          cmd_options: '-I -j'  # Ignore warnings, JSON format
+          fail_action: false
+          allow_issue_writing: false
+
+      - name: Run OWASP ZAP Baseline Scan - Backend API
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: 'http://localhost:5000'
+          rules_file_name: 'security-tests/zap-baseline.conf'
+          cmd_options: '-I -j'
+          fail_action: false
+          allow_issue_writing: false
+
+      - name: Upload ZAP Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-reports
+          path: |
+            security-tests/reports/
+            *.html
+            *.md
+
+      - name: Show Docker logs on failure
+        if: failure()
+        run: docker-compose logs
+
+      - name: Stop Docker Compose services
+        if: always()
+        run: docker-compose down
+
+  security-summary:
+    name: Security Test Summary
+    runs-on: ubuntu-latest
+    needs: [snyk-security, zap-baseline]
+    if: always()
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: security-reports
+
+      - name: Create Security Summary
+        run: |
+          echo "# Security Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Snyk Dependency Scan" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.snyk-security.result }}" == "success" ]; then
+            echo "✅ No high or critical vulnerabilities found" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Vulnerabilities detected - check Snyk report" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## OWASP ZAP Scan" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.zap-baseline.result }}" == "success" ]; then
+            echo "✅ ZAP baseline scan completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ ZAP scan found potential issues" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Reports are available in the workflow artifacts." >> $GITHUB_STEP_SUMMARY

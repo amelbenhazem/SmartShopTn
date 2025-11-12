@@ -58,4 +58,9 @@ postman/collection.json.bak
 data/
 *.db
 
+# Security Testing Reports
+security-tests/reports/
+*.zap
+.snyk
+
 

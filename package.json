@@ -11,11 +11,22 @@
     "test:e2e": "cd frontend && npm run test:e2e",
     "docker:up": "docker-compose up -d",
     "docker:down": "docker-compose down",
-    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint"
+    "lint": "cd backend && npm run lint && cd ../frontend && npm run lint",
+    "security:snyk": "snyk test",
+    "security:snyk:monitor": "snyk monitor",
+    "security:zap:baseline": "./security-tests/run-zap-baseline.sh",
+    "security:zap:full": "./security-tests/run-zap-full.sh",
+    "security:all": "npm run security:snyk && npm run security:zap:baseline"
   },
-  "keywords": ["e-commerce", "tunisia", "testing", "quality"],
+  "keywords": [
+    "e-commerce",
+    "tunisia",
+    "testing",
+    "quality"
+  ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "snyk": "^1.1300.2"
+  }
 }
-
-
